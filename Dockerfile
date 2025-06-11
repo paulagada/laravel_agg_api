@@ -1,22 +1,14 @@
 FROM php:8.2-fpm
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libpng-dev \
-    libjpeg-dev \
-    libonig-dev \
-    libxml2-dev \
-    zip \
-    unzip \
-    curl \
-    git \
-    libzip-dev \
-    mysql-client \
-    sqlite3
+RUN rm -rf /var/lib/apt/lists/* && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+      build-essential \
+      libpng-dev libjpeg-dev libonig-dev libxml2-dev \
+      zip unzip curl git libzip-dev mysql-client sqlite3 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install PHP extensions
-RUN docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd zip
+RUN docker-php-ext-install pdo_mysql pdo_sqlite mbstring bcmath gd zip
 
 # Set working directory
 WORKDIR /var/www
