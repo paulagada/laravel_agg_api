@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Auth;
 
+use function Pest\Laravel\json;
+
 class AgentController extends Controller
 {
     public function getTransactions(Request $request)
@@ -67,14 +69,36 @@ class AgentController extends Controller
         }
 
         $transactions = $query->orderBy('date', 'desc')->paginate();
+        $newTransactions = $transactions->getCollection()->map(function ($transaction) {
+            return [
+                'id' => $transaction->id,
+                'type' => $transaction->type,
+                'reference' => $transaction->reference,
+                'date' => $transaction->date,
+                'amount' => $transaction->amount,
+                'terminal_id' => $transaction->terminal_id,
+                'rrn' => $transaction->rrr,
+                'status_code' => $transaction->status_code,
+                'masked_pan' => $transaction->masked_pan,
+                'agent_id' => optional($transaction->agent)->first_name . ' ' . optional($transaction->agent)->last_name,
+                "created_at" => $transaction->created_at,
+                "updated_at" => $transaction->updated_at,
+            ];
+        });
 
-        
+
 
         return response()->json([
             'super_agent_id' => $superAgent->id,
             'agents_count' => $agentIds->count(),
-            'transactions_count' => $transactions->count(),
-            'transactions' => $transactions,
+            'transactions_count' => $transactions->total(),
+            'transactions' => $newTransactions,
+            'meta' => [
+                'current_page' => $transactions->currentPage(),
+                'last_page' => $transactions->lastPage(),
+                'per_page' => $transactions->perPage(),
+                'total' => $transactions->total(),
+            ],
         ]);
     }
 
@@ -109,11 +133,12 @@ class AgentController extends Controller
             'address' => $agent->address ?? '',
             'phone' => $agent->phone,
             'email' => $agent->email,
+            'agent_count' => $agentIds->count(),
             'aggregator_id' => $agent->aggregator_id ?? '',
             'is_super_agent' => $agent->is_super_agent,
             'terminals_count' => $terminals->count(),
             'transactions_count' => $transactions->count(),
-            'terminals' => $terminals,
+            // 'terminals' => $terminals,
             'commission_balance' => $agent->commission_balance,
             'has_transaction_pin' => $agent->has_transaction_pin,
             'monthly_transactions_amount' => $monthlyAmount,
@@ -177,5 +202,43 @@ class AgentController extends Controller
         });
 
         return response()->json($response);
+    }
+
+    //Terminals page:  Merchant name, tid, serial number, Date acquired, status.
+
+    public function getSuperTerminals()
+    {
+        $superAgent = Auth::user();
+
+        if (!$superAgent->is_super_agent) {
+            return response()->json(['error' => 'Access denied'], 403);
+        }
+
+        // Get all agent IDs under this super agent
+        $agentIds = Agent::where('aggregator_id', $superAgent->id)->pluck('id');
+
+        $terminals = Terminal::whereIn('agent_id', $agentIds)->paginate();
+
+        $response = $terminals->map(function ($terminal) {
+            $agent = Agent::find($terminal->agent_id);
+
+            return [
+                "agent_name" => $agent->first_name . " " . $agent->last_name,
+                "terminal_id" => $terminal->terminal_id,
+                "serial_number" => $terminal->serial_number,
+                "date_aquired" => "2025-01-01",
+                "status" => "active"
+            ];
+        });
+
+        return response()->json([
+            "terminals" => $response,
+            'meta' => [
+                'current_page' => $terminals->currentPage(),
+                'last_page' => $terminals->lastPage(),
+                'per_page' => $terminals->perPage(),
+                'total' => $terminals->total(),
+            ],
+        ]);
     }
 }
